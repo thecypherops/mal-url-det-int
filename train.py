@@ -1,4 +1,7 @@
 # Cell 1: Imports
+import warnings
+warnings.filterwarnings('ignore')
+
 from data_preprocessing import URLDataPreprocessor
 from model_setup import URLBertClassifier
 import torch

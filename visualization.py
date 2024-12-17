@@ -16,8 +16,7 @@ class ModelVisualizer:
             'grid.linewidth': 0.5,
             'axes.spines.top': False,
             'axes.spines.right': False,
-            'font.family': 'sans-serif',
-            'font.sans-serif': ['Arial'],
+            'font.family': 'DejaVu Sans',  # Default font that's available in Colab
             'axes.labelsize': 11,
             'axes.titlesize': 13,
             'xtick.labelsize': 10,
