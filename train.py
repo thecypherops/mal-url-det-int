@@ -55,6 +55,7 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     
     # Initialize ensemble with cross-validation
     ensemble = URLEnsembleClassifier(classifier, device=device, n_folds=5)
+    ensemble.visualizer = visualizer  # Add visualizer to ensemble
     
     # Extract features and perform cross-validation
     features = preprocessor.extract_traditional_features(csv_path)

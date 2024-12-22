@@ -90,6 +90,15 @@ class URLEnsembleClassifier:
         
         # Track feature importance
         self.feature_importance = {}
+        
+        self.fold_metrics = {
+            'train_f1': [],
+            'val_f1': [],
+            'train_precision': [],
+            'val_precision': [],
+            'train_recall': [],
+            'val_recall': []
+        }
     
     def cross_validate_models(self, features, labels):
         """Perform k-fold cross validation for all models"""
@@ -103,23 +112,55 @@ class URLEnsembleClassifier:
             X_train, X_val = features[train_idx], features[val_idx]
             y_train, y_val = labels[train_idx], labels[val_idx]
             
+            # Track metrics for this fold
+            fold_train_preds = []
+            fold_val_preds = []
+            
             # Train and evaluate each model
             fold_preds = {}
             for name, model in self.models.items():
                 if name != 'bert':  # Skip BERT as it's handled separately
                     print(f"Training {name}...")
                     model.fit(X_train, y_train)
+                    
+                    # Get predictions for both train and validation sets
+                    train_probs = model.predict_proba(X_train)
+                    val_probs = model.predict_proba(X_val)
+                    
+                    fold_train_preds.append(train_probs)
+                    fold_val_preds.append(val_probs)
+                    
                     score = model.score(X_val, y_val)
                     cv_scores[name].append(score)
-                    
-                    # Store predictions for ensemble analysis
                     fold_preds[name] = model.predict_proba(X_val)
+            
+            # Calculate metrics for this fold
+            train_metrics = self._calculate_fold_metrics(
+                np.mean(fold_train_preds, axis=0),
+                y_train
+            )
+            val_metrics = self._calculate_fold_metrics(
+                np.mean(fold_val_preds, axis=0),
+                y_val
+            )
+            
+            # Store metrics
+            self.fold_metrics['train_f1'].append(train_metrics['f1'])
+            self.fold_metrics['val_f1'].append(val_metrics['f1'])
+            self.fold_metrics['train_precision'].append(train_metrics['precision'])
+            self.fold_metrics['val_precision'].append(val_metrics['precision'])
+            self.fold_metrics['train_recall'].append(train_metrics['recall'])
+            self.fold_metrics['val_recall'].append(val_metrics['recall'])
             
             # Analyze ensemble performance for this fold
             self._analyze_fold_ensemble(fold_preds, y_val, fold)
         
         # Summarize cross-validation results
         self._summarize_cv_results(cv_scores)
+        
+        # Plot cross-validation metrics
+        if hasattr(self, 'visualizer'):
+            self.visualizer.plot_cross_validation_metrics(self.fold_metrics)
     
     def _analyze_fold_ensemble(self, fold_preds, y_true, fold):
         """Analyze ensemble performance for a single fold"""
@@ -275,3 +316,21 @@ class URLEnsembleClassifier:
         coefficients = self.meta_learner.coef_[0]
         for name, coef in zip(feature_names, coefficients):
             print(f"{name}: {coef:.4f}")
+    
+    def _calculate_fold_metrics(self, probs, true_labels):
+        """Calculate precision, recall, and F1 score for fold"""
+        predictions = np.argmax(probs, axis=1)
+        
+        tp = np.sum((predictions == 1) & (true_labels == 1))
+        fp = np.sum((predictions == 1) & (true_labels == 0))
+        fn = np.sum((predictions == 0) & (true_labels == 1))
+        
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        
+        return {
+            'precision': precision,
+            'recall': recall,
+            'f1': f1
+        }

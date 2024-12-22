@@ -371,3 +371,34 @@ class ModelVisualizer:
         if save_path:
             plt.savefig(save_path + '/learning_dynamics.png', dpi=300, bbox_inches='tight')
         plt.show()
+
+    def plot_cross_validation_metrics(self, fold_metrics, save_path=None):
+        """Plot performance metrics across different folds"""
+        plt.figure(figsize=(12, 6))
+        
+        # Extract metrics
+        folds = range(1, len(fold_metrics['train_f1']) + 1)
+        
+        # Plot F1 scores
+        plt.plot(folds, fold_metrics['train_f1'], 'b-', marker='o', label='Training F1')
+        plt.plot(folds, fold_metrics['val_f1'], 'b--', marker='o', label='Validation F1')
+        
+        # Plot Precision
+        plt.plot(folds, fold_metrics['train_precision'], 'r-', marker='s', label='Training Precision')
+        plt.plot(folds, fold_metrics['val_precision'], 'r--', marker='s', label='Validation Precision')
+        
+        # Plot Recall
+        plt.plot(folds, fold_metrics['train_recall'], 'g-', marker='^', label='Training Recall')
+        plt.plot(folds, fold_metrics['val_recall'], 'g--', marker='^', label='Validation Recall')
+        
+        plt.title('Performance Metrics Across Folds')
+        plt.xlabel('Fold Number')
+        plt.ylabel('Score')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path + '/cross_validation_metrics.png', 
+                       dpi=300, bbox_inches='tight')
+        plt.show()
