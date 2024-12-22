@@ -4,6 +4,7 @@ from model_setup import URLBertClassifier
 from data_preprocessing import URLDataPreprocessor
 import torch
 import matplotlib.pyplot as plt
+import os
 from visualization import ModelVisualizer
 
 class HyperparameterOptimizer:
@@ -93,15 +94,45 @@ class HyperparameterOptimizer:
         study.optimize(self.objective, n_trials=self.n_trials)
         
         self.best_params = study.best_params
+        print("\nOptimization History:")
+        print(f"Number of trials completed: {len(self.trial_scores)}")
+        print(f"Best F1 score: {max(self.trial_scores):.4f}")
         self.plot_optimization_history()
         return study.best_params
     
     def plot_optimization_history(self):
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(len(self.trial_scores)), self.trial_scores, 'b-', marker='o')
-        plt.title('Hyperparameter Optimization History')
-        plt.xlabel('Trial')
-        plt.ylabel('Validation F1 Score')
+        plt.figure(figsize=(12, 6))
+        
+        # Plot scores
+        trials = range(1, len(self.trial_scores) + 1)
+        plt.plot(trials, self.trial_scores, 'b-', marker='o', linewidth=2, markersize=8)
+        
+        # Add best score point
+        best_trial = np.argmax(self.trial_scores)
+        plt.plot(best_trial + 1, self.trial_scores[best_trial], 'r*', 
+                markersize=15, label=f'Best Score: {self.trial_scores[best_trial]:.4f}')
+        
+        # Customize plot
+        plt.title('Hyperparameter Optimization History', fontsize=14, pad=20)
+        plt.xlabel('Trial Number', fontsize=12)
+        plt.ylabel('Validation F1 Score', fontsize=12)
         plt.grid(True, linestyle='--', alpha=0.7)
-        plt.savefig('hyperparameter_optimization.png', dpi=300, bbox_inches='tight')
-        plt.close() 
+        plt.legend(fontsize=10)
+        
+        # Add score annotations
+        for i, score in enumerate(self.trial_scores):
+            plt.annotate(f'{score:.4f}', 
+                        (trials[i], score),
+                        textcoords="offset points",
+                        xytext=(0,10),
+                        ha='center',
+                        fontsize=8)
+        
+        plt.tight_layout()
+        
+        # Save and display
+        save_dir = 'model_plots'
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(f'{save_dir}/hyperparameter_optimization.png', 
+                   dpi=300, bbox_inches='tight')
+        plt.show() 
