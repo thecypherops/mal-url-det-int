@@ -11,9 +11,9 @@ import os
 from hyperparameter_tuning import HyperparameterOptimizer
 from ensemble_classifier import URLEnsembleClassifier
 import numpy as np
+import argparse
 
-# Cell 2: Training
-def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
+def train_model(args):
     # Clear memory
     gc.collect()
     if torch.cuda.is_available():
@@ -24,21 +24,32 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     print(f"Using device: {device}")
 
     # Hyperparameter optimization
-    if optimize_hyperparams:
+    if args.optimize_hyperparams:
         print("\nStarting hyperparameter optimization...")
-        optimizer = HyperparameterOptimizer(csv_path, n_trials=20)
+        optimizer = HyperparameterOptimizer(args.dataset_path, n_trials=args.n_trials)
         best_params = optimizer.optimize()
         print("\nBest hyperparameters found:")
         for param, value in best_params.items():
             print(f"{param}: {value}")
     
     # Initialize preprocessor and load data
-    batch_size = best_params['batch_size'] if optimize_hyperparams else 32
-    preprocessor = URLDataPreprocessor(batch_size=batch_size)
-    train_loader, val_loader = preprocessor.prepare_data(csv_path)
+    batch_size = best_params['batch_size'] if args.optimize_hyperparams else args.batch_size
+    
+    # Initialize preprocessor based on mode
+    if args.debug:
+        print("\nRunning in debug mode with reduced sample size...")
+        preprocessor = URLDataPreprocessor(
+            batch_size=batch_size, 
+            debug_sample_size=args.debug_sample_size
+        )
+    else:
+        print("\nRunning in production mode...")
+        preprocessor = URLDataPreprocessor(batch_size=batch_size)
+    
+    train_loader, val_loader = preprocessor.prepare_data(args.dataset_path)
 
     # Initialize model
-    if optimize_hyperparams:
+    if args.optimize_hyperparams:
         classifier = URLBertClassifier(
             device=device,
             dropout_rate=best_params['dropout_rate'],
@@ -54,12 +65,12 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     os.makedirs(save_path, exist_ok=True)
     
     # Initialize ensemble with cross-validation
-    ensemble = URLEnsembleClassifier(classifier, device=device, n_folds=5)
-    ensemble.visualizer = visualizer  # Add visualizer to ensemble
+    ensemble = URLEnsembleClassifier(classifier, device=device, n_folds=args.n_folds)
+    ensemble.visualizer = visualizer
     
     # Extract features and perform cross-validation
-    features = preprocessor.extract_traditional_features(csv_path)
-    labels = preprocessor.get_labels(csv_path)
+    features = preprocessor.extract_traditional_features(args.dataset_path)
+    labels = preprocessor.get_labels(args.dataset_path)
     
     # Convert features to torch tensor if needed
     if isinstance(features, np.ndarray):
@@ -69,12 +80,10 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     ensemble.scaler = preprocessor.scaler
     
     try:
-        # Attempt to collect BERT inputs
-        print("\nCollecting input_ids and attention_masks from training data...")
         # Process BERT inputs in batches
         bert_probs_list = []
         
-        with torch.no_grad():  # Disable gradient computation
+        with torch.no_grad():
             for batch in train_loader:
                 input_ids = batch['input_ids'].to(device)
                 attention_mask = batch['attention_mask'].to(device)
@@ -97,19 +106,18 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     except Exception as e:
         print(f"Warning: Could not collect BERT inputs ({str(e)})")
         print("Falling back to traditional features only")
-        # Train with cross-validation using only traditional features
         ensemble.train_traditional_models(features, labels)
     
     # Add ensemble to classifier
     classifier.ensemble = ensemble
     
     best_val_loss = float('inf')
-    patience = 3
+    patience = args.patience
     patience_counter = 0
     
     # Training loop
-    for epoch in range(num_epochs):
-        print(f"\nEpoch {epoch+1}/{num_epochs}")
+    for epoch in range(args.num_epochs):
+        print(f"\nEpoch {epoch+1}/{args.num_epochs}")
         
         # Train
         train_loss = classifier.train_epoch(train_loader)
@@ -153,7 +161,33 @@ def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     # Print detailed performance summary
     visualizer.print_performance_summary()
 
-# Cell 3: Run training
-dataset_path = 'dataset_50k.csv'
-num_epochs = 3
-train_model(dataset_path, num_epochs)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='URL Classification Training Script')
+    
+    # Dataset and mode arguments
+    parser.add_argument('--dataset_path', type=str, default='dataset_50k.csv',
+                      help='Path to the dataset CSV file')
+    parser.add_argument('--debug', action='store_true',
+                      help='Run in debug mode with reduced sample size')
+    parser.add_argument('--debug_sample_size', type=int, default=1000,
+                      help='Sample size to use in debug mode')
+    
+    # Training parameters
+    parser.add_argument('--batch_size', type=int, default=32,
+                      help='Batch size for training')
+    parser.add_argument('--num_epochs', type=int, default=3,
+                      help='Number of training epochs')
+    parser.add_argument('--n_folds', type=int, default=5,
+                      help='Number of cross-validation folds')
+    parser.add_argument('--patience', type=int, default=3,
+                      help='Early stopping patience')
+    
+    # Hyperparameter optimization
+    parser.add_argument('--optimize_hyperparams', action='store_true',
+                      help='Perform hyperparameter optimization')
+    parser.add_argument('--n_trials', type=int, default=20,
+                      help='Number of optimization trials')
+    
+    args = parser.parse_args()
+    
+    train_model(args)
