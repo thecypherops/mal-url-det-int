@@ -12,15 +12,15 @@ from torch.nn import functional as F
 from torch.nn import Dropout
 
 class URLBertClassifier(nn.Module):
-    def __init__(self, device='cuda', num_features=8):
+    def __init__(self, device='cuda', num_features=8, dropout_rate=0.2, hidden_size=384, num_layers=3):
         super(URLBertClassifier, self).__init__()
         self.device = device
         self.num_features = num_features
         
         # BERT config
         config = DistilBertConfig.from_pretrained('distilbert-base-uncased')
-        config.hidden_dropout_prob = 0.2  # Reduced dropout
-        config.attention_probs_dropout_prob = 0.2  # Reduced dropout
+        config.hidden_dropout_prob = dropout_rate
+        config.attention_probs_dropout_prob = dropout_rate
         config.num_labels = 2
         config.output_hidden_states = True
         

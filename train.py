@@ -8,11 +8,12 @@ import torch
 import gc
 from visualization import ModelVisualizer
 import os
+from hyperparameter_tuning import HyperparameterOptimizer
 from ensemble_classifier import URLEnsembleClassifier
 import numpy as np
 
 # Cell 2: Training
-def train_model(csv_path, num_epochs=3):
+def train_model(csv_path, num_epochs=3, optimize_hyperparams=True):
     # Clear memory
     gc.collect()
     if torch.cuda.is_available():
@@ -22,15 +23,30 @@ def train_model(csv_path, num_epochs=3):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # Initialize preprocessor and load data
-    #preprocessor = URLDataPreprocessor(batch_size=32, debug_sample_size=1000)
+    # Hyperparameter optimization
+    if optimize_hyperparams:
+        print("\nStarting hyperparameter optimization...")
+        optimizer = HyperparameterOptimizer(csv_path, n_trials=20)
+        best_params = optimizer.optimize()
+        print("\nBest hyperparameters found:")
+        for param, value in best_params.items():
+            print(f"{param}: {value}")
     
-    # Production mode
-    preprocessor = URLDataPreprocessor(batch_size=32)
+    # Initialize preprocessor and load data
+    batch_size = best_params['batch_size'] if optimize_hyperparams else 32
+    preprocessor = URLDataPreprocessor(batch_size=batch_size)
     train_loader, val_loader = preprocessor.prepare_data(csv_path)
 
     # Initialize model
-    classifier = URLBertClassifier(device=device)
+    if optimize_hyperparams:
+        classifier = URLBertClassifier(
+            device=device,
+            dropout_rate=best_params['dropout_rate'],
+            hidden_size=best_params['hidden_size'],
+            num_layers=best_params['num_layers']
+        )
+    else:
+        classifier = URLBertClassifier(device=device)
     
     # Initialize visualizer
     visualizer = ModelVisualizer()
